@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::components::{Hunger, Inventory, Path, Position, Stamina, Task};
-use crate::resources::{GameTime, SaveLoadState, TileMap};
+use crate::components::{AssignedTask, Hunger, Inventory, Path, Position, Stamina, Task};
+use crate::resources::{GameTime, SaveLoadState, TileLocks, TileMap, TaskScheduler};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PawnSaveData {
@@ -14,6 +14,7 @@ pub struct PawnSaveData {
     pub task: Task,
     pub path: Option<Path>,
     pub inventory: Inventory,
+    pub assigned_task: Option<AssignedTask>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -39,9 +40,10 @@ pub fn save_game_system(world: &mut World) {
             &Task,
             Option<&Path>,
             &Inventory,
+            Option<&AssignedTask>,
         )>();
 
-        for (pos, hunger, stamina, task, path, inventory) in query.iter(world) {
+        for (pos, hunger, stamina, task, path, inventory, assigned_task) in query.iter(world) {
             pawns.push(PawnSaveData {
                 position: *pos,
                 hunger: hunger.clone(),
@@ -49,6 +51,7 @@ pub fn save_game_system(world: &mut World) {
                 task: task.clone(),
                 path: path.cloned(),
                 inventory: inventory.clone(),
+                assigned_task: assigned_task.cloned(),
             });
         }
 
@@ -96,6 +99,8 @@ pub fn load_game_system(world: &mut World) {
                 Ok(save_data) => {
                     world.insert_resource(save_data.tile_map);
                     world.insert_resource(save_data.game_time);
+                    world.insert_resource(TileLocks::new());
+                    world.insert_resource(TaskScheduler::new());
 
                     let mut to_despawn = Vec::new();
                     let mut query = world.query::<Entity>();
@@ -118,6 +123,10 @@ pub fn load_game_system(world: &mut World) {
 
                         if let Some(path) = pawn_data.path {
                             entity.insert(path);
+                        }
+                        if let Some(assigned) = pawn_data.assigned_task {
+                            entity.insert(assigned);
+                            entity.insert(crate::components::NeedsPathfinding);
                         }
                     }
 

@@ -13,13 +13,13 @@ mod resources;
 mod systems;
 
 use components::{Hunger, Inventory, Pawn, Position, ResourceType, Stamina, Task, Tile};
-use resources::{GameTime, NetworkChannels, NetworkCommand, NetworkEvent, SaveLoadState, TileMap};
+use resources::{GameTime, NetworkChannels, NetworkCommand, NetworkEvent, SaveLoadState, TileLocks, TileMap, TaskScheduler};
 use systems::{
-    movement_system::movement_system,
+    movement_system::{movement_system, pathfinding_executor_system},
     needs_system::{needs_system, task_assignment_system},
     network_system::network_command_system,
-    pathfinding_system::pathfinding_system,
     save_load_system::{load_game_system, save_game_system},
+    task_scheduler_system::{cleanup_stale_locks_system, task_scheduler_system},
 };
 
 const TICK_RATE: f64 = 60.0;
@@ -47,6 +47,8 @@ fn main() {
     world.insert_resource(GameTime::new());
     world.insert_resource(SaveLoadState::default());
     world.insert_resource(TileMap::new(MAP_WIDTH, MAP_HEIGHT));
+    world.insert_resource(TileLocks::new());
+    world.insert_resource(TaskScheduler::new());
     world.insert_resource(NetworkChannels {
         event_sender: event_sender.clone(),
         command_receiver,
@@ -57,9 +59,11 @@ fn main() {
     schedule.add_systems((
         network_command_system,
         load_game_system,
+        cleanup_stale_locks_system,
         needs_system,
+        task_scheduler_system,
         task_assignment_system,
-        pathfinding_system,
+        pathfinding_executor_system,
         movement_system,
         save_game_system,
     ));

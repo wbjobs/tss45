@@ -199,3 +199,94 @@ pub enum NetworkCommand {
     SpawnPawn(Position),
     SetTile(Position, Tile),
 }
+
+#[derive(Resource, Clone, Debug, Default)]
+pub struct TileLocks {
+    pub locks: std::collections::HashMap<(i32, i32), (bevy_ecs::entity::Entity, ResourceType)>,
+}
+
+impl TileLocks {
+    pub fn new() -> Self {
+        Self {
+            locks: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn is_locked(&self, x: i32, y: i32) -> bool {
+        self.locks.contains_key(&(x, y))
+    }
+
+    pub fn is_locked_by(&self, x: i32, y: i32, entity: bevy_ecs::entity::Entity) -> bool {
+        self.locks.get(&(x, y)).map(|(e, _)| *e == entity).unwrap_or(false)
+    }
+
+    pub fn try_lock(
+        &mut self,
+        x: i32,
+        y: i32,
+        entity: bevy_ecs::entity::Entity,
+        resource_type: ResourceType,
+    ) -> bool {
+        if self.is_locked(x, y) {
+            return false;
+        }
+        self.locks.insert((x, y), (entity, resource_type));
+        true
+    }
+
+    pub fn unlock(&mut self, x: i32, y: i32) {
+        self.locks.remove(&(x, y));
+    }
+
+    pub fn unlock_entity(&mut self, entity: bevy_ecs::entity::Entity) {
+        self.locks.retain(|_, (e, _)| *e != entity);
+    }
+
+    pub fn get_locked_positions(&self) -> Vec<(i32, i32)> {
+        self.locks.keys().copied().collect()
+    }
+
+    pub fn get_locked_count(&self) -> usize {
+        self.locks.len()
+    }
+}
+
+#[derive(Resource, Clone, Debug, Default)]
+pub struct TaskScheduler {
+    pub pending_requests: Vec<(bevy_ecs::entity::Entity, Position, ResourceType)>,
+    pub assignments: std::collections::HashMap<bevy_ecs::entity::Entity, (Position, ResourceType)>,
+}
+
+impl TaskScheduler {
+    pub fn new() -> Self {
+        Self {
+            pending_requests: Vec::new(),
+            assignments: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn request_task(
+        &mut self,
+        entity: bevy_ecs::entity::Entity,
+        position: Position,
+        resource_type: ResourceType,
+    ) {
+        if !self.assignments.contains_key(&entity)
+            && !self.pending_requests.iter().any(|(e, _, _)| *e == entity)
+        {
+            self.pending_requests.push((entity, position, resource_type));
+        }
+    }
+
+    pub fn complete_task(&mut self, entity: bevy_ecs::entity::Entity) {
+        self.assignments.remove(&entity);
+    }
+
+    pub fn get_assignment(&self, entity: bevy_ecs::entity::Entity) -> Option<(Position, ResourceType)> {
+        self.assignments.get(&entity).copied()
+    }
+
+    pub fn has_assignment(&self, entity: bevy_ecs::entity::Entity) -> bool {
+        self.assignments.contains_key(&entity)
+    }
+}

@@ -233,3 +233,52 @@ pub struct NeedsPathfinding;
 
 #[derive(Component, Clone, Debug, Serialize, Deserialize)]
 pub struct TileMarker;
+
+#[derive(Component, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TileLock {
+    pub locked_by: Option<Entity>,
+    pub resource_type: ResourceType,
+}
+
+impl TileLock {
+    pub fn new(locked_by: Entity, resource_type: ResourceType) -> Self {
+        Self {
+            locked_by: Some(locked_by),
+            resource_type,
+        }
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.locked_by.is_some()
+    }
+
+    pub fn is_locked_by(&self, entity: Entity) -> bool {
+        self.locked_by == Some(entity)
+    }
+}
+
+#[derive(Component, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequestTask {
+    pub resource_type: ResourceType,
+}
+
+impl RequestTask {
+    pub fn new(resource_type: ResourceType) -> Self {
+        Self { resource_type }
+    }
+}
+
+#[derive(Component, Clone, Debug, Serialize, Deserialize)]
+pub struct AssignedTask {
+    pub target_position: Position,
+    pub resource_type: ResourceType,
+}
+
+impl AssignedTask {
+    pub fn new(target_position: Position, resource_type: ResourceType) -> Self {
+        Self {
+            target_position,
+            resource_type,
+        }
+    }
+}
