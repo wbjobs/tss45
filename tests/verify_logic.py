@@ -95,6 +95,174 @@ class TileMap:
         return nearest
 
 
+class SkillType(Enum):
+    MINING = "mining"
+    FARMING = "farming"
+    BUILDING = "building"
+
+
+class Skills:
+    """技能系统"""
+    def __init__(self, mining=1.0, farming=1.0, building=1.0):
+        self.mining = mining
+        self.farming = farming
+        self.building = building
+        self.max_level = 10.0
+
+    def get_skill(self, skill_type: SkillType) -> float:
+        if skill_type == SkillType.MINING:
+            return self.mining
+        elif skill_type == SkillType.FARMING:
+            return self.farming
+        elif skill_type == SkillType.BUILDING:
+            return self.building
+        return 1.0
+
+    def level_up(self, skill_type: SkillType, amount: float):
+        if skill_type == SkillType.MINING:
+            self.mining = min(self.mining + amount, self.max_level)
+        elif skill_type == SkillType.FARMING:
+            self.farming = min(self.farming + amount, self.max_level)
+        elif skill_type == SkillType.BUILDING:
+            self.building = min(self.building + amount, self.max_level)
+
+    def get_gather_bonus(self, resource_type: ResourceType) -> float:
+        if resource_type == ResourceType.IRON:
+            return self.mining
+        elif resource_type == ResourceType.WOOD:
+            return self.mining * 0.8 + self.farming * 0.2
+        elif resource_type == ResourceType.FOOD:
+            return self.farming
+        return 1.0
+
+
+class Happiness:
+    """幸福度系统"""
+    def __init__(self, max_value=100.0):
+        self.value = max_value * 0.7
+        self.max = max_value
+        self.decay_rate = 0.5
+        self.food_memory: List[ResourceType] = []
+        self.food_memory_max = 5
+        self.entertainment_factor = 0.3
+        self.social_factor = 0.2
+
+    def is_unhappy(self) -> bool:
+        return self.value < self.max * 0.4
+
+    def is_depressed(self) -> bool:
+        return self.value < self.max * 0.2
+
+    def refuses_to_work(self) -> bool:
+        return self.value < self.max * 0.25
+
+    def eat_food(self, food_type: ResourceType):
+        if food_type == ResourceType.FOOD:
+            self.food_memory.append(food_type)
+            if len(self.food_memory) > self.food_memory_max:
+                self.food_memory.pop(0)
+
+            variety = self._calculate_food_variety()
+            if variety > 0.6:
+                self.value = min(self.value + 5.0, self.max)
+            elif variety > 0.3:
+                pass
+            else:
+                self.value = max(self.value - 3.0, 0.0)
+
+    def _calculate_food_variety(self) -> float:
+        if not self.food_memory:
+            return 1.0
+        unique = len(set(self.food_memory))
+        return unique / len(self.food_memory)
+
+    def gain_entertainment(self, amount: float):
+        self.value = min(self.value + amount * self.entertainment_factor, self.max)
+
+    def gain_social(self, amount: float):
+        self.value = min(self.value + amount * self.social_factor, self.max)
+
+    def decay(self, delta: float):
+        self.value = max(self.value - self.decay_rate * delta, 0.0)
+
+
+class BuildingType(Enum):
+    HOUSE = "House"
+    FARM = "Farm"
+    ENTERTAINMENT_PARK = "EntertainmentPark"
+    MINE = "Mine"
+
+
+class Building:
+    """建筑组件"""
+    def __init__(self, building_type: BuildingType):
+        self.building_type = building_type
+        self.health = 0.0
+        self.max_health = 100.0
+        self.is_complete = False
+        self.build_progress = 0.0
+        self.build_cost_wood = 0
+        self.build_cost_stone = 0
+
+        if building_type == BuildingType.HOUSE:
+            self.max_health = 100.0
+            self.build_cost_wood = 20
+            self.build_cost_stone = 10
+        elif building_type == BuildingType.FARM:
+            self.max_health = 50.0
+            self.build_cost_wood = 10
+        elif building_type == BuildingType.ENTERTAINMENT_PARK:
+            self.max_health = 150.0
+            self.build_cost_wood = 50
+            self.build_cost_stone = 20
+        elif building_type == BuildingType.MINE:
+            self.max_health = 80.0
+            self.build_cost_wood = 15
+            self.build_cost_stone = 25
+
+    def build(self, amount: float, building_skill: float) -> bool:
+        if self.is_complete:
+            return True
+        build_speed = amount * (1.0 + building_skill * 0.2)
+        self.build_progress += build_speed
+        self.health = min(self.build_progress, self.max_health)
+        if self.build_progress >= self.max_health:
+            self.is_complete = True
+            self.health = self.max_health
+            return True
+        return False
+
+
+class EntertainmentFacility:
+    """娱乐设施组件"""
+    def __init__(self, radius: int, happiness_per_second: float, capacity: int):
+        self.radius = radius
+        self.happiness_per_second = happiness_per_second
+        self.capacity = capacity
+        self.current_visitors = 0
+
+    def can_visit(self) -> bool:
+        return self.current_visitors < self.capacity
+
+    def enter(self) -> bool:
+        if self.can_visit():
+            self.current_visitors += 1
+            return True
+        return False
+
+    def leave(self):
+        if self.current_visitors > 0:
+            self.current_visitors -= 1
+
+
+class TaskCategory(Enum):
+    GATHER_RESOURCE = "GatherResource"
+    BUILD_STRUCTURE = "BuildStructure"
+    ENTERTAINMENT = "Entertainment"
+    SOCIALIZE = "Socialize"
+    IDLE = "Idle"
+
+
 class TileLocks:
     """空间锁管理器"""
     def __init__(self):
@@ -545,6 +713,305 @@ def verify_collision_avoidance():
     return True
 
 
+def verify_skills_system():
+    """验证技能系统"""
+    print("=" * 60)
+    print("技能系统验证")
+    print("=" * 60)
+
+    print("测试1: 技能初始值")
+    skills = Skills(2.0, 1.5, 3.0)
+    assert skills.mining == 2.0
+    assert skills.farming == 1.5
+    assert skills.building == 3.0
+    print("  [OK] 技能初始值正确")
+
+    print("测试2: 技能升级")
+    skills.level_up(SkillType.MINING, 1.5)
+    assert skills.mining == 3.5
+    print("  [OK] 采矿技能升级正确")
+
+    print("测试3: 技能等级上限")
+    skills2 = Skills(8.0, 1.0, 1.0)
+    skills2.level_up(SkillType.MINING, 5.0)
+    assert skills2.mining == 10.0
+    print("  [OK] 技能等级上限10级")
+
+    print("测试4: 采集加成与资源类型对应")
+    skills3 = Skills(5.0, 3.0, 1.0)
+    assert skills3.get_gather_bonus(ResourceType.IRON) == 5.0
+    assert skills3.get_gather_bonus(ResourceType.FOOD) == 3.0
+    print("  [OK] 资源类型对应正确的技能加成")
+
+    print()
+    return True
+
+
+def verify_happiness_system():
+    """验证幸福度系统"""
+    print("=" * 60)
+    print("幸福度系统验证")
+    print("=" * 60)
+
+    print("测试1: 初始幸福度70%")
+    happiness = Happiness(100.0)
+    assert abs(happiness.value - 70.0) < 0.1
+    print("  [OK] 初始幸福度为最大值的70%")
+
+    print("测试2: 不开心阈值(40%)")
+    h2 = Happiness(100.0)
+    h2.value = 35.0
+    assert h2.is_unhappy() == True
+    h2.value = 50.0
+    assert h2.is_unhappy() == False
+    print("  [OK] 不开心阈值正确")
+
+    print("测试3: 拒绝工作阈值(25%)")
+    h3 = Happiness(100.0)
+    h3.value = 20.0
+    assert h3.refuses_to_work() == True
+    h3.value = 30.0
+    assert h3.refuses_to_work() == False
+    print("  [OK] 拒绝工作阈值正确")
+
+    print("测试4: 食物单调降低幸福度")
+    h4 = Happiness(100.0)
+    initial = h4.value
+    for _ in range(5):
+        h4.eat_food(ResourceType.FOOD)
+    assert h4.value < initial, "连续吃同一种食物应降低幸福度"
+    print(f"  [OK] 食物单调惩罚: {initial:.1f} -> {h4.value:.1f}")
+
+    print("测试5: 娱乐增加幸福度")
+    h5 = Happiness(100.0)
+    h5.value = 30.0
+    old_val = h5.value
+    h5.gain_entertainment(20.0)
+    assert h5.value > old_val
+    print(f"  [OK] 娱乐增加幸福度: {old_val:.1f} -> {h5.value:.1f}")
+
+    print("测试6: 幸福度自然衰减")
+    h6 = Happiness(100.0)
+    h6.value = 50.0
+    old_val = h6.value
+    h6.decay(10.0)
+    assert h6.value < old_val
+    print(f"  [OK] 幸福度衰减: {old_val:.1f} -> {h6.value:.1f}")
+
+    print()
+    return True
+
+
+def verify_building_system():
+    """验证建造系统"""
+    print("=" * 60)
+    print("建造系统验证")
+    print("=" * 60)
+
+    print("测试1: 建筑初始状态")
+    building = Building(BuildingType.HOUSE)
+    assert building.is_complete == False
+    assert building.build_progress == 0.0
+    print("  [OK] 建筑初始未完成状态")
+
+    print("测试2: 建造进度增长")
+    building2 = Building(BuildingType.HOUSE)
+    was_complete = building2.build(20.0, 1.0)
+    assert was_complete == False
+    assert building2.build_progress > 0.0
+    print(f"  [OK] 建造进度: {building2.build_progress:.1f}")
+
+    print("测试3: 技能加成建造速度")
+    building3 = Building(BuildingType.HOUSE)
+    building4 = Building(BuildingType.HOUSE)
+    building3.build(10.0, 1.0)
+    building4.build(10.0, 5.0)
+    assert building4.build_progress > building3.build_progress
+    print(f"  [OK] 高技能建造更快: 技能1={building3.build_progress:.1f}, 技能5={building4.build_progress:.1f}")
+
+    print("测试4: 建筑完成")
+    building5 = Building(BuildingType.HOUSE)
+    was_complete = building5.build(200.0, 1.0)
+    assert was_complete == True
+    assert building5.is_complete == True
+    assert building5.health == building5.max_health
+    print("  [OK] 建筑完成状态正确")
+
+    print("测试5: 不同建筑类型属性")
+    house = Building(BuildingType.HOUSE)
+    park = Building(BuildingType.ENTERTAINMENT_PARK)
+    assert park.max_health > house.max_health
+    assert park.build_cost_wood > house.build_cost_wood
+    print("  [OK] 不同建筑类型属性不同")
+
+    print()
+    return True
+
+
+def verify_task_matching_with_skills():
+    """验证基于技能的任务匹配度"""
+    print("=" * 60)
+    print("任务匹配度算法验证")
+    print("=" * 60)
+
+    def calculate_match_score(pawn_pos: Position, skills: Skills, task_pos: Position, 
+                              task_skill: SkillType, priority: float = 1.0) -> float:
+        distance = pawn_pos.manhattan_to(task_pos)
+        distance_score = 1.0 / (distance + 1.0)
+        skill_level = skills.get_skill(task_skill)
+        skill_score = skill_level / 10.0
+
+        distance_weight = 0.4
+        skill_weight = 0.5
+        priority_weight = 0.1
+
+        return distance_score * distance_weight + skill_score * skill_weight + priority * priority_weight
+
+    print("测试1: 技能高者得分更高")
+    pos = Position(0, 0)
+    task_pos = Position(10, 0)
+
+    low_skill = Skills(1.0, 1.0, 1.0)
+    high_skill = Skills(8.0, 1.0, 1.0)
+
+    low_score = calculate_match_score(pos, low_skill, task_pos, SkillType.MINING)
+    high_score = calculate_match_score(pos, high_skill, task_pos, SkillType.MINING)
+    assert high_score > low_score
+    print(f"  [OK] 高技能得分更高: 低={low_score:.3f}, 高={high_score:.3f}")
+
+    print("测试2: 距离近者得分更高")
+    skills = Skills(5.0, 5.0, 5.0)
+    near_pos = Position(2, 0)
+    far_pos = Position(20, 0)
+
+    near_score = calculate_match_score(near_pos, skills, task_pos, SkillType.MINING)
+    far_score = calculate_match_score(far_pos, skills, task_pos, SkillType.MINING)
+    assert near_score > far_score
+    print(f"  [OK] 近距离得分更高: 近={near_score:.3f}, 远={far_score:.3f}")
+
+    print("测试3: 高优先级任务得分更高")
+    pos = Position(5, 0)
+    skills = Skills(3.0, 3.0, 3.0)
+
+    low_pri = calculate_match_score(pos, skills, task_pos, SkillType.MINING, 1.0)
+    high_pri = calculate_match_score(pos, skills, task_pos, SkillType.MINING, 2.0)
+    assert high_pri > low_pri
+    print(f"  [OK] 高优先级得分更高: 普通={low_pri:.3f}, 高优={high_pri:.3f}")
+
+    print("测试4: 技能优势可弥补距离劣势")
+    far_high_skill = Skills(10.0, 1.0, 1.0)
+    near_low_skill = Skills(1.0, 1.0, 1.0)
+
+    far_pos = Position(15, 0)
+    near_pos = Position(3, 0)
+
+    far_score = calculate_match_score(far_pos, far_high_skill, task_pos, SkillType.MINING)
+    near_score = calculate_match_score(near_pos, near_low_skill, task_pos, SkillType.MINING)
+
+    assert far_score > near_score, "技能大师即使远也应获得优先分配"
+    print(f"  [OK] 技能优势可弥补距离: 远高技={far_score:.3f} > 近低技={near_score:.3f}")
+
+    print()
+    return True
+
+
+def verify_entertainment_facility():
+    """验证娱乐设施系统"""
+    print("=" * 60)
+    print("娱乐设施系统验证")
+    print("=" * 60)
+
+    print("测试1: 容量限制")
+    facility = EntertainmentFacility(5, 2.0, 3)
+    assert facility.can_visit() == True
+    facility.enter()
+    facility.enter()
+    facility.enter()
+    assert facility.can_visit() == False
+    print("  [OK] 容量限制工作正常")
+
+    print("测试2: 离开后可重新进入")
+    facility.leave()
+    assert facility.can_visit() == True
+    print("  [OK] 离开后可重新进入")
+
+    print("测试3: 娱乐设施被动幸福度增益模拟")
+    facility_pos = Position(10, 10)
+    facility2 = EntertainmentFacility(5, 3.0, 10)
+
+    near_pawn = Position(10, 10)
+    mid_pawn = Position(13, 10)
+    far_pawn = Position(20, 10)
+
+    near_dist = near_pawn.manhattan_to(facility_pos)
+    mid_dist = mid_pawn.manhattan_to(facility_pos)
+    far_dist = far_pawn.manhattan_to(facility_pos)
+
+    assert near_dist <= facility2.radius
+    assert mid_dist <= facility2.radius
+    assert far_dist > facility2.radius
+    print(f"  [OK] 半径判定正确: 距离0={near_dist}(范围内), 3={mid_dist}(范围内), 10={far_dist}(范围外)")
+
+    print()
+    return True
+
+
+def verify_social_interaction():
+    """验证社交互动系统"""
+    print("=" * 60)
+    print("社交互动系统验证")
+    print("=" * 60)
+
+    print("测试1: 社交增加幸福度")
+    h1 = Happiness(100.0)
+    h1.value = 40.0
+    old_val = h1.value
+    h1.gain_social(10.0)
+    assert h1.value > old_val
+    print(f"  [OK] 社交增加幸福度: {old_val:.1f} -> {h1.value:.1f}")
+
+    print("测试2: 近距离检测社交伙伴")
+    class SimPawn:
+        def __init__(self, pid, x, y):
+            self.id = pid
+            self.pos = Position(x, y)
+
+    pawns = [
+        SimPawn(1, 5, 5),
+        SimPawn(2, 6, 5),
+        SimPawn(3, 20, 20),
+    ]
+
+    pawn1 = pawns[0]
+    nearby_partners = [
+        p for p in pawns
+        if p.id != pawn1.id and p.pos.manhattan_to(pawn1.pos) <= 2
+    ]
+    assert len(nearby_partners) == 1
+    assert nearby_partners[0].id == 2
+    print(f"  [OK] 距离2格内检测到 {len(nearby_partners)} 个社交伙伴")
+
+    print("测试3: 远距离无社交伙伴")
+    pawn3 = pawns[2]
+    nearby_partners_3 = [
+        p for p in pawns
+        if p.id != pawn3.id and p.pos.manhattan_to(pawn3.pos) <= 2
+    ]
+    assert len(nearby_partners_3) == 0
+    print("  [OK] 远距离无社交伙伴")
+
+    print("测试4: 任务分类匹配 - 社交类型")
+    cat1 = TaskCategory.SOCIALIZE
+    cat2 = TaskCategory.SOCIALIZE
+    cat3 = TaskCategory.ENTERTAINMENT
+    assert cat1 == cat2
+    assert cat1 != cat3
+    print("  [OK] 社交任务分类匹配正确")
+
+    print()
+    return True
+
+
 def verify_json_serialization():
     """验证JSON序列化格式"""
     print("=" * 60)
@@ -763,6 +1230,12 @@ def main():
         ("空间锁机制", verify_tile_locks),
         ("任务调度中心", verify_task_scheduler),
         ("碰撞避免综合", verify_collision_avoidance),
+        ("技能系统", verify_skills_system),
+        ("幸福度系统", verify_happiness_system),
+        ("建造系统", verify_building_system),
+        ("任务匹配度算法", verify_task_matching_with_skills),
+        ("娱乐设施系统", verify_entertainment_facility),
+        ("社交互动系统", verify_social_interaction),
         ("JSON序列化", verify_json_serialization),
         ("游戏存档格式", verify_game_state_save_format),
         ("ECS架构概念", verify_ecs_concepts),

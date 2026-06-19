@@ -53,6 +53,28 @@ pub fn find_path(
     find_path_with_locks(tile_map, start, goal, None)
 }
 
+pub fn find_nearest_social_target(
+    tile_map: &TileMap,
+    start: &Position,
+    targets: &[Position],
+    max_distance: i32,
+) -> Option<Position> {
+    let mut nearest: Option<Position> = None;
+    let mut nearest_dist = i32::MAX;
+
+    for target in targets {
+        let dist = heuristic(start, target);
+        if dist < nearest_dist && dist <= max_distance * 10 {
+            if find_path(tile_map, start, target).is_some() {
+                nearest = Some(*target);
+                nearest_dist = dist;
+            }
+        }
+    }
+
+    nearest
+}
+
 pub fn find_path_with_locks(
     tile_map: &TileMap,
     start: &Position,

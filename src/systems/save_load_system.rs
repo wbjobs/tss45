@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::components::{AssignedTask, Hunger, Inventory, Path, Position, Stamina, Task};
+use crate::components::{
+    AssignedTask, Building, BuildingType, EntertainmentFacility, Happiness, Hunger, Inventory,
+    Path, Position, Skills, Stamina, Task,
+};
 use crate::resources::{GameTime, SaveLoadState, TileLocks, TileMap, TaskScheduler};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -11,6 +14,8 @@ pub struct PawnSaveData {
     pub position: Position,
     pub hunger: Hunger,
     pub stamina: Stamina,
+    pub happiness: Happiness,
+    pub skills: Skills,
     pub task: Task,
     pub path: Option<Path>,
     pub inventory: Inventory,
@@ -18,10 +23,18 @@ pub struct PawnSaveData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BuildingSaveData {
+    pub position: Position,
+    pub building: Building,
+    pub entertainment_facility: Option<EntertainmentFacility>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GameSaveData {
     pub tile_map: TileMap,
     pub game_time: GameTime,
     pub pawns: Vec<PawnSaveData>,
+    pub buildings: Vec<BuildingSaveData>,
 }
 
 pub fn save_game_system(world: &mut World) {
@@ -33,21 +46,27 @@ pub fn save_game_system(world: &mut World) {
         let game_time = world.get_resource::<GameTime>().unwrap().clone();
 
         let mut pawns = Vec::new();
-        let mut query = world.query::<(
+        let mut pawn_query = world.query::<(
             &Position,
             &Hunger,
             &Stamina,
+            &Happiness,
+            &Skills,
             &Task,
             Option<&Path>,
             &Inventory,
             Option<&AssignedTask>,
         )>();
 
-        for (pos, hunger, stamina, task, path, inventory, assigned_task) in query.iter(world) {
+        for (pos, hunger, stamina, happiness, skills, task, path, inventory, assigned_task) in
+            pawn_query.iter(world)
+        {
             pawns.push(PawnSaveData {
                 position: *pos,
                 hunger: hunger.clone(),
                 stamina: stamina.clone(),
+                happiness: happiness.clone(),
+                skills: skills.clone(),
                 task: task.clone(),
                 path: path.cloned(),
                 inventory: inventory.clone(),
@@ -55,10 +74,23 @@ pub fn save_game_system(world: &mut World) {
             });
         }
 
+        let mut buildings = Vec::new();
+        let mut building_query =
+            world.query::<(&Position, &Building, Option<&EntertainmentFacility>)>();
+
+        for (pos, building, facility) in building_query.iter(world) {
+            buildings.push(BuildingSaveData {
+                position: *pos,
+                building: building.clone(),
+                entertainment_facility: facility.cloned(),
+            });
+        }
+
         let save_data = GameSaveData {
             tile_map,
             game_time,
             pawns,
+            buildings,
         };
 
         match serde_json::to_string_pretty(&save_data) {
@@ -118,6 +150,8 @@ pub fn load_game_system(world: &mut World) {
                             .insert(pawn_data.position)
                             .insert(pawn_data.hunger)
                             .insert(pawn_data.stamina)
+                            .insert(pawn_data.happiness)
+                            .insert(pawn_data.skills)
                             .insert(pawn_data.task)
                             .insert(pawn_data.inventory);
 
@@ -127,6 +161,17 @@ pub fn load_game_system(world: &mut World) {
                         if let Some(assigned) = pawn_data.assigned_task {
                             entity.insert(assigned);
                             entity.insert(crate::components::NeedsPathfinding);
+                        }
+                    }
+
+                    for building_data in save_data.buildings {
+                        let mut entity = world.spawn_empty();
+                        entity
+                            .insert(building_data.position)
+                            .insert(building_data.building);
+
+                        if let Some(facility) = building_data.entertainment_facility {
+                            entity.insert(facility);
                         }
                     }
 

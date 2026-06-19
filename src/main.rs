@@ -12,11 +12,13 @@ mod pathfinding;
 mod resources;
 mod systems;
 
-use components::{Hunger, Inventory, Pawn, Position, ResourceType, Stamina, Task, Tile};
+use components::{Building, BuildingType, Happiness, Hunger, Inventory, Pawn, Position, ResourceType, Skills, Stamina, Task, Tile};
 use resources::{GameTime, NetworkChannels, NetworkCommand, NetworkEvent, SaveLoadState, TileLocks, TileMap, TaskScheduler};
 use systems::{
+    building_system::building_system,
+    entertainment_system::{entertainment_passive_benefit_system, entertainment_system, social_system},
     movement_system::{movement_system, pathfinding_executor_system},
-    needs_system::{needs_system, task_assignment_system},
+    needs_system::{needs_system, skill_gain_system, task_assignment_system},
     network_system::network_command_system,
     save_load_system::{load_game_system, save_game_system},
     task_scheduler_system::{cleanup_stale_locks_system, task_scheduler_system},
@@ -65,11 +67,17 @@ fn main() {
         task_assignment_system,
         pathfinding_executor_system,
         movement_system,
+        building_system,
+        entertainment_system,
+        social_system,
+        entertainment_passive_benefit_system,
+        skill_gain_system,
         save_game_system,
     ));
 
     initialize_map(&mut world);
     spawn_pawns(&mut world, 5);
+    initialize_buildings(&mut world);
 
     println!("ECS游戏服务器已启动");
     println!("地图大小: {}x{}", MAP_WIDTH, MAP_HEIGHT);
@@ -175,17 +183,53 @@ fn spawn_pawns(world: &mut World, count: usize) {
         let x = center_x + offset_x;
         let y = center_y + offset_y;
 
+        let mining = rng.gen_range(0.5..3.0);
+        let farming = rng.gen_range(0.5..3.0);
+        let building = rng.gen_range(0.5..3.0);
+
         world.spawn((
             Pawn,
             Position::new(x, y),
             Hunger::new(100.0, 2.0),
             Stamina::new(100.0, 5.0, 5.0, 15.0),
+            Happiness::new(100.0),
+            Skills::new(mining, farming, building),
             Task::Idle,
             Inventory::default(),
         ));
 
-        println!("Pawn {} 生成于 ({}, {})", i, x, y);
+        println!(
+            "Pawn {} 生成于 ({}, {}) | 采矿:{:.1} 种植:{:.1} 建造:{:.1}",
+            i, x, y, mining, farming, building
+        );
     }
 
     println!("共生成 {} 个Pawn", count);
+}
+
+fn initialize_buildings(world: &mut World) {
+    let center_x = MAP_WIDTH / 2;
+    let center_y = MAP_HEIGHT / 2;
+
+    let park_pos = Position::new(center_x + 8, center_y);
+    let mut park_building = Building::new(BuildingType::EntertainmentPark);
+    park_building.is_complete = true;
+    park_building.build_progress = park_building.max_health;
+    park_building.health = park_building.max_health;
+
+    let park_entity = world.spawn_empty().id();
+    world.entity_mut(park_entity).insert((
+        park_pos,
+        park_building,
+        crate::components::EntertainmentFacility::new(8, 3.0, 15),
+    ));
+
+    let house_pos = Position::new(center_x - 8, center_y);
+    let house_building = Building::new(BuildingType::House);
+    let house_entity = world.spawn_empty().id();
+    world.entity_mut(house_entity).insert((house_pos, house_building));
+
+    println!("初始建筑已生成");
+    println!("  - 娱乐公园(已完成): ({}, {})", park_pos.x, park_pos.y);
+    println!("  - 房屋(待建造): ({}, {})", house_pos.x, house_pos.y);
 }

@@ -184,6 +184,21 @@ pub enum NetworkEvent {
         value: f32,
         max: f32,
     },
+    HappinessChanged {
+        entity_id: u64,
+        value: f32,
+        max: f32,
+    },
+    SkillsChanged {
+        entity_id: u64,
+        mining: f32,
+        farming: f32,
+        building: f32,
+    },
+    BuildingCompleted {
+        position: Position,
+        building_type: crate::components::BuildingType,
+    },
     WorldState {
         tick: u64,
         map_size: (i32, i32),
@@ -253,8 +268,8 @@ impl TileLocks {
 
 #[derive(Resource, Clone, Debug, Default)]
 pub struct TaskScheduler {
-    pub pending_requests: Vec<(bevy_ecs::entity::Entity, Position, ResourceType)>,
-    pub assignments: std::collections::HashMap<bevy_ecs::entity::Entity, (Position, ResourceType)>,
+    pub pending_requests: Vec<(bevy_ecs::entity::Entity, Position, crate::components::TaskCategory)>,
+    pub assignments: std::collections::HashMap<bevy_ecs::entity::Entity, (Position, crate::components::TaskCategory)>,
 }
 
 impl TaskScheduler {
@@ -269,12 +284,12 @@ impl TaskScheduler {
         &mut self,
         entity: bevy_ecs::entity::Entity,
         position: Position,
-        resource_type: ResourceType,
+        category: crate::components::TaskCategory,
     ) {
         if !self.assignments.contains_key(&entity)
             && !self.pending_requests.iter().any(|(e, _, _)| *e == entity)
         {
-            self.pending_requests.push((entity, position, resource_type));
+            self.pending_requests.push((entity, position, category));
         }
     }
 
@@ -282,8 +297,8 @@ impl TaskScheduler {
         self.assignments.remove(&entity);
     }
 
-    pub fn get_assignment(&self, entity: bevy_ecs::entity::Entity) -> Option<(Position, ResourceType)> {
-        self.assignments.get(&entity).copied()
+    pub fn get_assignment(&self, entity: bevy_ecs::entity::Entity) -> Option<(Position, crate::components::TaskCategory)> {
+        self.assignments.get(&entity).cloned()
     }
 
     pub fn has_assignment(&self, entity: bevy_ecs::entity::Entity) -> bool {
